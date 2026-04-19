@@ -12,8 +12,10 @@ android_logger = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
+futures-util = { workspace = true }
 mist_common = { path = "../common" }
 env_logger = { workspace = true }
+inotify = { workspace = true }
 log = { workspace = true }
 memfd = { workspace = true }
 nix = { workspace = true, features = ["ptrace", "signal", "socket", "uio"] }

@@ -1,18 +1,18 @@
 use crate::daemon::mist::IMistService::{BnMistService, IMistService, IMistServiceAsyncService};
+use crate::monitor::PackageMonitor;
 use crate::selinux::fsetcon;
-use anyhow::bail;
+use anyhow::{anyhow, bail};
+use clap::Subcommand;
 use mist_common::binder::AddServiceEx;
 use mist_common::constants::{DUMP_FLAG_PRIORITY_HIDE, MIST_SERVICE_NAME};
-use mist_common::idmap::{IDMAP_SIZE, IdmapWriter};
-use clap::Subcommand;
+use mist_common::idmap::IDMAP_SIZE;
 use rsbinder::TokioRuntime;
 use rsbinder::{Interface, ProcessState, StatusCode, hub};
-use std::convert::Into;
-use std::{fs, future};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
+use std::{fs, future};
 use tokio::runtime::Handle;
 
 include!(concat!(env!("OUT_DIR"), "/mist.rs"));
@@ -24,19 +24,7 @@ fn current_rt() -> TokioRuntime<Handle> {
     TokioRuntime(Handle::current())
 }
 
-struct MistService {
-    idmap: Mutex<IdmapWriter>,
-}
-
-impl MistService {
-    fn new(idmap: File) -> anyhow::Result<Self> {
-        let writer = unsafe { IdmapWriter::from_fd(&idmap)? };
-
-        Ok(Self {
-            idmap: Mutex::new(writer),
-        })
-    }
-}
+struct MistService;
 
 impl Interface for MistService {
     fn dump(&self, writer: &mut dyn Write, _args: &[String]) -> rsbinder::Result<()> {
@@ -55,28 +43,20 @@ impl IMistServiceAsyncService for MistService {
         "xyz.mufanc.IMistService"
     }
 
-    async fn idmapList(&self) -> rsbinder::status::Result<Vec<i32>> {
-        let idmap = self.idmap.lock().unwrap();
-        Ok(idmap.get_all().into_iter().map(|uid| uid as i32).collect())
+    async fn whitelistList(&self) -> rsbinder::status::Result<Vec<String>> {
+        Ok(PackageMonitor::instance().list())
     }
 
-    async fn idmapGet(&self, id: i32) -> rsbinder::status::Result<bool> {
-        let idmap = self.idmap.lock().unwrap();
-        idmap
-            .get(id as u32)
+    async fn whitelistGet(&self, pkg: &str) -> rsbinder::status::Result<bool> {
+        PackageMonitor::instance()
+            .get(pkg)
             .ok_or_else(|| StatusCode::BadValue.into())
     }
 
-    async fn idmapSet(&self, id: i32, value: bool) -> rsbinder::status::Result<()> {
-        let mut idmap = self.idmap.lock().unwrap();
-        idmap
-            .set(id as u32, value)
-            .map_err(|_| StatusCode::Unknown.into())
-    }
-
-    async fn idmapClear(&self) -> rsbinder::status::Result<()> {
-        let mut idmap = self.idmap.lock().unwrap();
-        idmap.clear().map_err(|_| StatusCode::Unknown.into())
+    async fn whitelistSet(&self, pkg: &str, value: bool) -> rsbinder::status::Result<()> {
+        PackageMonitor::instance()
+            .set(pkg, value)
+            .map_err(|_| StatusCode::BadValue.into())
     }
 }
 
@@ -98,11 +78,11 @@ pub fn prepare_idmap() -> anyhow::Result<(File, File)> {
     Ok((file_rw, file_ro))
 }
 
-pub async fn run(idmap: File) -> anyhow::Result<()> {
+pub async fn run() -> anyhow::Result<()> {
     ProcessState::init_default();
     ProcessState::start_thread_pool();
 
-    let service = BnMistService::new_async_binder(MistService::new(idmap)?, current_rt());
+    let service = BnMistService::new_async_binder(MistService, current_rt());
 
     hub::default().add_service(
         MIST_SERVICE_NAME,
@@ -116,26 +96,32 @@ pub async fn run(idmap: File) -> anyhow::Result<()> {
 }
 
 #[derive(Subcommand)]
-pub enum IdmapCommands {
-    #[command(about = "List all enabled UIDs")]
+pub enum WhitelistCommands {
+    #[command(about = "List all enabled packages")]
     List,
-    #[command(about = "Get idmap value for a UID")]
+    #[command(about = "Check if a package is enabled")]
     Get {
-        #[arg(help = "UID (10000-19999)")]
-        id: i32,
+        #[arg(help = "Package name")]
+        pkg: String,
     },
-    #[command(about = "Set idmap value for a UID")]
+    #[command(about = "Enable or disable a package")]
     Set {
-        #[arg(help = "UID (10000-19999)")]
-        id: i32,
-        #[arg(action = clap::ArgAction::Set, help = "Enable or disable")]
-        value: bool,
+        #[arg(help = "Package name")]
+        pkg: String,
+        #[arg(help = "Enable or disable")]
+        value: String,
     },
-    #[command(about = "Clear all idmap entries")]
-    Clear,
 }
 
-pub fn handle_idmap_command(command: IdmapCommands) -> anyhow::Result<()> {
+fn parse_bool(value: &str) -> Option<bool> {
+    match value {
+        "1" | "y" | "yes" | "on" | "true" => Some(true),
+        "0" | "n" | "no" | "off" | "false" => Some(false),
+        _ => None,
+    }
+}
+
+pub fn handle_whitelist_command(command: WhitelistCommands) -> anyhow::Result<()> {
     ProcessState::init_default();
 
     let service = match hub::get_interface::<dyn IMistService>(MIST_SERVICE_NAME) {
@@ -148,21 +134,19 @@ pub fn handle_idmap_command(command: IdmapCommands) -> anyhow::Result<()> {
     }
 
     match command {
-        IdmapCommands::List => {
-            let list = service.idmapList()?;
-            for id in list {
-                println!("{id}");
+        WhitelistCommands::List => {
+            let list = service.whitelistList()?;
+            for pkg in list {
+                println!("{pkg}");
             }
         }
-        IdmapCommands::Get { id } => {
-            let value = service.idmapGet(id)?;
+        WhitelistCommands::Get { pkg } => {
+            let value = service.whitelistGet(&pkg)?;
             println!("{value}");
         }
-        IdmapCommands::Set { id, value } => {
-            service.idmapSet(id, value)?;
-        }
-        IdmapCommands::Clear => {
-            service.idmapClear()?;
+        WhitelistCommands::Set { pkg, value } => {
+            let value = parse_bool(&value).ok_or_else(|| anyhow!("invalid value: {value}"))?;
+            service.whitelistSet(&pkg, value)?;
         }
     }
 

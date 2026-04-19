@@ -1,8 +1,7 @@
 package mist;
 
 interface IMistService {
-    int[] idmapList() = 1;
-    boolean idmapGet(int id) = 2;
-    void idmapSet(int id, boolean value) = 3;
-    void idmapClear() = 4;
+    String[] whitelistList() = 1;
+    boolean whitelistGet(String pkg) = 2;
+    void whitelistSet(String pkg, boolean value) = 3;
 }

@@ -12,6 +12,12 @@ install-magisk variant="release": (package variant)
     adb push target/module.zip /data/local/tmp
     adb shell su -c magisk --install-module /data/local/tmp/module.zip
 
+debug variant="release": (build variant)
+    adb push target/aarch64-linux-android/{{variant}}/mist /data/local/tmp
+    adb shell chmod +x /data/local/tmp/mist
+    adb shell su -c "killall mist" || true
+    adb shell su -c "RUST_LOG=debug /data/local/tmp/mist inject /"
+
 package variant="release": (build variant)
     rm -rf target/module.zip || true
     cp -R module target/module

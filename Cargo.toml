@@ -12,6 +12,8 @@ async-trait = "0.1"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
+futures-util = "0.3"  # Todo: remove when https://github.com/hannobraun/inotify-rs/commit/0056f98f381f9de330126663b6bcf4969112e9f1 published
+inotify = "0.11"
 log = "0.4"
 memfd = "0.6"
 memmap2 = "0.9"
