@@ -3,10 +3,12 @@ use crate::monitor::PackageMonitor;
 use crate::selinux::fsetcon;
 use anyhow::{anyhow, bail};
 use clap::Subcommand;
+use log::warn;
 use mist_common::binder::AddServiceEx;
 use mist_common::constants::{DUMP_FLAG_PRIORITY_HIDE, MIST_SERVICE_NAME};
 use mist_common::idmap::IDMAP_SIZE;
 use rsbinder::TokioRuntime;
+use rsbinder::thread_state::CallingContext;
 use rsbinder::{Interface, ProcessState, StatusCode, hub};
 use std::fs::File;
 use std::io::Write;
@@ -26,6 +28,17 @@ fn current_rt() -> TokioRuntime<Handle> {
 
 struct MistService;
 
+fn check_permission() -> rsbinder::status::Result<()> {
+    let ctx = CallingContext::default();
+
+    if ctx.uid > 1000 {
+        warn!("Permission denied for uid {}", ctx.uid);
+        return Err(StatusCode::PermissionDenied.into());
+    }
+
+    Ok(())
+}
+
 impl Interface for MistService {
     fn dump(&self, writer: &mut dyn Write, _args: &[String]) -> rsbinder::Result<()> {
         let _ = writer.write("Hello, World!\n".as_bytes());
@@ -44,16 +57,19 @@ impl IMistServiceAsyncService for MistService {
     }
 
     async fn whitelistList(&self) -> rsbinder::status::Result<Vec<String>> {
+        check_permission()?;
         Ok(PackageMonitor::instance().list())
     }
 
     async fn whitelistGet(&self, pkg: &str) -> rsbinder::status::Result<bool> {
+        check_permission()?;
         PackageMonitor::instance()
             .get(pkg)
             .ok_or_else(|| StatusCode::BadValue.into())
     }
 
     async fn whitelistSet(&self, pkg: &str, value: bool) -> rsbinder::status::Result<()> {
+        check_permission()?;
         PackageMonitor::instance()
             .set(pkg, value)
             .map_err(|_| StatusCode::BadValue.into())
