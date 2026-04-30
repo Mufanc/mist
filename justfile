@@ -19,12 +19,12 @@ debug variant="release": (build variant)
     adb shell su -c "RUST_LOG=debug /data/local/tmp/mist inject /"
 
 package variant="release": (build variant)
-    rm -rf target/module.zip || true
+    rm -rf target/module-*.zip || true
     cp -R module target/module
     cp target/aarch64-linux-android/{{variant}}/mist target/module/bin
     cp target/aarch64-linux-android/{{variant}}/libmist.so target/module/bin
     rm target/module/bin/.keep
-    cd target/module && zip -r ../module.zip .
+    cd target/module && zip -r ../module-{{variant}}.zip .
     rm -rf target/module
 
 build variant="release":
