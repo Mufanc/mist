@@ -42,6 +42,3 @@ codegen-units = 1
 
 [profile.release.package.trojan]
 codegen-units = 1
-
-[profile.release.package.service]
-codegen-units = 1
