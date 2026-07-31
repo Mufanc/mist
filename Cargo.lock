@@ -883,6 +883,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mist_test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mist_common",
+ "rsbinder",
+]
+
+[[package]]
 name = "nix"
 version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1847,11 +1856,10 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "wisp"
 version = "0.1.0"
-source = "git+https://github.com/Mufanc/wisp#d141ebadceda0d604ccbcba92049ef65bbdf91b4"
+source = "git+https://github.com/Mufanc/wisp#968904eac33d34a68502ecd833beb75890afcf1e"
 dependencies = [
  "dynasmrt",
  "libc 1.0.0-alpha.3",
- "log",
  "region",
  "thiserror",
 ]

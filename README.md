@@ -56,12 +56,11 @@ rustup target add aarch64-linux-android
 ### Build
 
 ```bash
-just build              # Build (release by default)
-just package            # Package as Magisk module
-just install-magisk     # Build, package, and install via adb
+just build                 # Build (release by default)
+just package-module        # Package as Magisk module
 ```
 
-All commands accept an optional `debug` or `release` argument. The module zip is output to `target/module.zip`.
+Both commands accept an optional `debug` or `release` argument. The module zip is output to `target/module-<variant>.zip`.
 
 ## Acknowledgements
 

@@ -464,7 +464,7 @@ impl Tracee {
 
             let local_fd = self.take_fd(local_fd_num)?;
 
-            RemoteFd::new(local_fd_num).close_for(&self)?;
+            RemoteFd::new(local_fd_num).close_for(self)?;
 
             (local_fd, RemoteFd::new(remote_fd_num))
         };

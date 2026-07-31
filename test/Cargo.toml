@@ -1,0 +1,13 @@
+[package]
+name = "mist_test"
+version.workspace = true
+edition.workspace = true
+
+[[test]]
+name = "mist_test"
+path = "src/smoke.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+mist_common = { path = "../common" }
+rsbinder = { workspace = true }

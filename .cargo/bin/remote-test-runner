@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+
+set -eu
+
+root="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"
+artifact_dir="$(dirname "$(dirname "$1")")"
+pid="$(adb shell su root getprop init.svc_debug_pid.servicemanager | tr -d '\r')"
+maps="$(adb shell su root cat "/proc/$pid/maps")"
+
+if printf '%s\n' "$maps" | grep -q libmist.so; then
+    echo "servicemanager already contains libmist.so; reboot before testing" >&2
+    exit 1
+fi
+
+adb push \
+    "$artifact_dir/mist" \
+    "$artifact_dir/libmist.so" \
+    "$root/module/sepolicy.rule" \
+    "$root/test/magiskpolicy" \
+    /data/local/tmp/
+adb install -r "$root/test/mist-test.apk"
+adb push "$1" /data/local/tmp/mist-test
+adb shell run-as xyz.mufanc.mist.test rm -f mist-test
+adb shell run-as xyz.mufanc.mist.test cp /data/local/tmp/mist-test mist-test
+adb shell run-as xyz.mufanc.mist.test chmod 700 mist-test
+adb shell chmod 700 /data/local/tmp/magiskpolicy /data/local/tmp/mist /data/local/tmp/mist-test
+adb shell su root /data/local/tmp/magiskpolicy --live --apply /data/local/tmp/sepolicy.rule
+adb shell "su root sh -c 'RUST_LOG=debug /data/local/tmp/mist inject /data/local/tmp/libmist.so >/data/local/tmp/mist.log 2>&1 </dev/null &'"
+
+attempt=0
+while ! adb shell su root service check mist 2>/dev/null | grep -q ': found'; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -eq 50 ]; then
+        adb shell su root cat /data/local/tmp/mist.log >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+
+shift
+adb shell su root /data/local/tmp/mist-test "$@"

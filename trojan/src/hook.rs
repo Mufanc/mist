@@ -1,6 +1,6 @@
 use crate::cxx_string::CxxStr;
 use android_logger::Config;
-use anyhow::{Context, bail};
+use anyhow::Context;
 use core::slice;
 use log::{LevelFilter, debug, error};
 use mist_common::constants::{DUMP_FLAG_PRIORITY_HIDE, MIST_SERVICE_NAME};
@@ -202,41 +202,27 @@ fn run_catching(seqpacket_fd: RawFd, library_fd: RawFd) -> anyhow::Result<()> {
         let list_service_fn =
             resolver.lookup_symbol(make_query("_ZN7android14ServiceManager12listServicesE"))?;
 
-        let stub = unsafe {
+        unsafe {
             Wisp::intercept_fn(
                 executable_base.byte_add(list_service_fn.addr),
                 intercept_list_service,
             )
-        };
-
-        match stub {
-            Ok(stub) => mem::forget(stub),
-            Err(err) => bail!(
-                "failed to intercept `ServiceManager::listServices`: {:?}",
-                err
-            ),
         }
+        .context("failed to intercept `ServiceManager::listServices`")?;
     }
 
     {
         let action_allowed_from_lookup_fn =
             resolver.lookup_symbol(make_query("_ZN7android6Access23actionAllowedFromLookupE"))?;
 
-        let stub = unsafe {
+        unsafe {
             Wisp::hook_fn(
                 executable_base.byte_add(action_allowed_from_lookup_fn.addr),
                 hook_action_allowed_from_lookup as _,
                 None,
             )
-        };
-
-        match stub {
-            Ok(stub) => mem::forget(stub),
-            Err(err) => bail!(
-                "failed to hook `Access::actionAllowedFromLookup`: {:?}",
-                err
-            ),
         }
+        .context("failed to hook `Access::actionAllowedFromLookup`")?;
     }
 
     Ok(())
